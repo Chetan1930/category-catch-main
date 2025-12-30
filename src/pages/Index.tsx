@@ -1,22 +1,38 @@
-
 import { useState } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { LinkItem, groupLinksByCategory } from "@/utils/linkUtils";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useLinks } from "@/hooks/useLinks";
+import { groupLinksByCategory } from "@/utils/linkUtils";
 import LinkForm from "@/components/LinkForm";
 import CategorySection from "@/components/CategorySection";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { BookmarkPlus, Search, X } from "lucide-react";
+import { BookmarkPlus, Search, X, LogOut, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 
 const Index = () => {
-  const [links, setLinks] = useLocalStorage<LinkItem[]>("saved-links", []);
+  const { user, loading: authLoading, signOut } = useAuth();
+  const { links, loading: linksLoading, addLink, deleteLink, editLink, renameCategory } = useLinks();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  
-  const filteredLinks = links.filter(link => {
+  const navigate = useNavigate();
+
+  // Redirect to auth if not logged in
+  if (!authLoading && !user) {
+    navigate("/auth");
+    return null;
+  }
+
+  if (authLoading || linksLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-secondary/50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const filteredLinks = links.filter((link) => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -25,44 +41,35 @@ const Index = () => {
       link.category.toLowerCase().includes(query)
     );
   });
-  
+
   const linksByCategory = groupLinksByCategory(filteredLinks);
-  const categories = [...new Set(links.map(link => link.category))].sort();
-  
-  const addLink = (link: LinkItem) => {
-    setLinks(prevLinks => [link, ...prevLinks]);
+  const categories = [...new Set(links.map((link) => link.category))].sort();
+
+  const handleAddLink = (link: { url: string; title: string; favicon: string; category: string }) => {
+    addLink({
+      url: link.url,
+      title: link.title,
+      favicon: link.favicon,
+      category: link.category,
+    });
   };
-  
-  const deleteLink = (id: string) => {
-    setLinks(prevLinks => prevLinks.filter(link => link.id !== id));
-    toast.success("Link deleted");
+
+  const handleEditLink = (id: string, updates: Partial<{ title: string; url: string; category: string; favicon: string }>) => {
+    editLink(id, updates);
   };
-  
-  const editLink = (id: string, updates: Partial<LinkItem>) => {
-    setLinks(prevLinks => 
-      prevLinks.map(link => 
-        link.id === id ? { ...link, ...updates } : link
-      )
-    );
-    toast.success("Link updated");
-  };
-  
-  const renameCategory = (oldName: string, newName: string) => {
-    setLinks(prevLinks => 
-      prevLinks.map(link => 
-        link.category === oldName ? { ...link, category: newName } : link
-      )
-    );
-    toast.success(`Category renamed to "${newName}"`);
-  };
-  
+
   const toggleSearch = () => {
     setIsSearching(!isSearching);
     if (isSearching) {
       setSearchQuery("");
     }
   };
-  
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/50 px-4 md:px-8 py-8">
       <div className="max-w-7xl mx-auto">
@@ -71,7 +78,7 @@ const Index = () => {
             <h1 className="text-3xl font-semibold mb-1">LinkVault</h1>
             <p className="text-muted-foreground">Your personal link management system</p>
           </div>
-          
+
           <div className="flex items-center gap-2 w-full md:w-auto">
             {isSearching ? (
               <div className="relative w-full md:w-auto animate-slide-in-right">
@@ -105,7 +112,7 @@ const Index = () => {
                 <Search className="h-4 w-4" />
               </Button>
             )}
-            
+
             <Dialog>
               <DialogTrigger asChild>
                 <Button className="gap-1">
@@ -114,14 +121,22 @@ const Index = () => {
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <LinkForm addLink={addLink} isPopover categories={categories} />
+                <LinkForm addLink={handleAddLink} isPopover categories={categories} />
               </DialogContent>
             </Dialog>
+
+            <Button variant="outline" size="icon" onClick={handleSignOut} title="Sign out">
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </header>
 
         {links.length === 0 ? (
-          <EmptyState onAddClick={() => document.querySelector<HTMLButtonElement>("[data-state='closed']")?.click()} />
+          <EmptyState
+            onAddClick={() =>
+              document.querySelector<HTMLButtonElement>("[data-state='closed']")?.click()
+            }
+          />
         ) : (
           <>
             {Object.keys(linksByCategory).length > 0 ? (
@@ -133,21 +148,15 @@ const Index = () => {
                     category={category}
                     links={categoryLinks}
                     onDeleteLink={deleteLink}
-                    onEditLink={editLink}
+                    onEditLink={handleEditLink}
                     onRenameCategory={renameCategory}
                     categories={categories}
                   />
                 ))
             ) : (
               <div className="glass p-8 rounded-2xl text-center animate-fade-in-up">
-                <p className="text-lg">
-                  No links match your search for "{searchQuery}"
-                </p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setSearchQuery("")}
-                  className="mt-4"
-                >
+                <p className="text-lg">No links match your search for "{searchQuery}"</p>
+                <Button variant="outline" onClick={() => setSearchQuery("")} className="mt-4">
                   Clear search
                 </Button>
               </div>
@@ -160,4 +169,3 @@ const Index = () => {
 };
 
 export default Index;
-
