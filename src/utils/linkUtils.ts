@@ -3,9 +3,9 @@ export interface LinkItem {
   id: string;
   url: string;
   title: string;
-  favicon: string;
+  favicon: string | null;
   category: string;
-  createdAt: number;
+  createdAt: string | number;
 }
 
 export interface Category {
@@ -102,7 +102,11 @@ export function normalizeUrl(url: string): string {
 
 // Sort links by date (newest first)
 export function sortLinksByDate(links: LinkItem[]): LinkItem[] {
-  return [...links].sort((a, b) => b.createdAt - a.createdAt);
+  return [...links].sort((a, b) => {
+    const dateA = typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : a.createdAt;
+    const dateB = typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt;
+    return dateB - dateA;
+  });
 }
 
 // Group links by category
